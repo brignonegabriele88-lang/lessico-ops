@@ -1,0 +1,96 @@
+@import url("https://fonts.googleapis.com/css2?family=Fugaz+One&family=Share+Tech+Mono&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #030d02;
+  --color-surface: #132124;
+  --color-surface-2: #385458;
+  --color-fg: #cadee7;
+  --color-muted: #65907d;
+  --color-primary: #9ac6d1;
+  --color-primary-fg: #030d02;
+  --color-alert: #e24a3c;
+  --color-border: #5e9097;
+  --color-paper: #a2c0b8;
+  --font-sans: "Fugaz One", "Arial Black", "Segoe UI", sans-serif;
+  --font-mono: "Share Tech Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+}
+
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  html,
+  body,
+  #app {
+    min-height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-mono);
+    line-height: 1.5;
+    text-rendering: geometricPrecision;
+  }
+
+  ::selection {
+    background: var(--color-primary);
+    color: var(--color-primary-fg);
+  }
+}
+
+@layer components {
+  .scanlines {
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgb(0 0 0 / 0) 0 2px,
+      rgb(0 0 0 / 0.14) 2px 3px
+    );
+  }
+
+  .vignette {
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: 59;
+    background: radial-gradient(ellipse at center, transparent 45%, rgb(0 0 0 / 0.45) 100%);
+  }
+
+  .phosphor {
+    color: var(--color-primary);
+    text-shadow: 0 0 8px rgb(154 198 209 / 0.45);
+  }
+
+  .alert-mark {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    font-size: 4.5rem;
+    line-height: 0.85;
+    letter-spacing: -0.04em;
+    color: var(--color-alert);
+    text-shadow: 0 0 12px rgb(226 74 60 / 0.45);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
