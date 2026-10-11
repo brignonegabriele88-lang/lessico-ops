@@ -18,7 +18,8 @@ const signalSchema = z.object({
     message: "payload too large",
   }),
 });
-const leaveSchema = z.object({ op: z.literal("leave"), room: ID, peer: ID });
+const SESSION = z.string().regex(/^s-[a-zA-Z0-9_-]{1,64}$/);
+const leaveSchema = z.object({ op: z.literal("leave"), room: ID, peer: ID, session: SESSION });
 const postSchema = z.discriminatedUnion("op", [signalSchema, leaveSchema]);
 
 const PEER_TTL_SECONDS = 30;
@@ -35,6 +36,7 @@ function ensureSchema(sql: Sql): Promise<void> {
          room TEXT NOT NULL,
          peer_id TEXT NOT NULL,
          name TEXT NOT NULL DEFAULT '',
+         session_id TEXT NOT NULL DEFAULT '',
          last_seen TIMESTAMPTZ NOT NULL DEFAULT now(),
          PRIMARY KEY (room, peer_id)
        )`,
@@ -50,6 +52,7 @@ function ensureSchema(sql: Sql): Promise<void> {
          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
        )`,
     );
+    await sql.query(`ALTER TABLE webrtc_peers ADD COLUMN IF NOT EXISTS session_id TEXT NOT NULL DEFAULT ''`);
     await sql.query(
       `CREATE INDEX IF NOT EXISTS webrtc_signals_inbox
          ON webrtc_signals (room, to_peer, id)`,
@@ -71,13 +74,13 @@ async function roster(sql: Sql, room: string): Promise<PeerRow[]> {
   return rows.map((r) => ({ id: r.peer_id, name: r.name }));
 }
 
-async function touchPeer(sql: Sql, room: string, peer: string, name: string) {
+async function touchPeer(sql: Sql, room: string, peer: string, name: string, session: string) {
   await sql.query(
-    `INSERT INTO webrtc_peers (room, peer_id, name, last_seen)
-     VALUES ($1, $2, $3, now())
+    `INSERT INTO webrtc_peers (room, peer_id, name, session_id, last_seen)
+     VALUES ($1, $2, $3, $4, now())
      ON CONFLICT (room, peer_id)
-     DO UPDATE SET last_seen = now(), name = EXCLUDED.name`,
-    [room, peer, name],
+     DO UPDATE SET last_seen = now(), name = EXCLUDED.name, session_id = EXCLUDED.session_id`,
+    [room, peer, name, session],
   );
 }
 
@@ -105,21 +108,23 @@ async function handleGet(url: URL): Promise<Response> {
       room: ID,
       peer: ID,
       name: z.string().max(64).default(""),
+      session: SESSION,
       since: z.coerce.number().int().min(0).default(0),
     })
     .safeParse({
       room: url.searchParams.get("room"),
       peer: url.searchParams.get("peer"),
       name: url.searchParams.get("name") ?? "",
+      session: url.searchParams.get("session"),
       since: url.searchParams.get("since") ?? 0,
     });
   if (!parsed.success) return json({ error: "invalid query" }, 400);
-  const { room, peer, name, since } = parsed.data;
+  const { room, peer, name, session, since } = parsed.data;
 
   const sql = await getSql();
   await ensureSchema(sql);
   if (since === 0 || Math.random() < 0.02) await prune(sql);
-  await touchPeer(sql, room, peer, name);
+  await touchPeer(sql, room, peer, name, session);
   const rows = await sql.query<{
     id: number;
     from_peer: string;
@@ -163,10 +168,10 @@ async function handlePost(request: Request): Promise<Response> {
       [msg.room, msg.to, msg.from, msg.kind, JSON.stringify(msg.payload)],
     );
   } else {
-    await sql.query(`DELETE FROM webrtc_peers WHERE room = $1 AND peer_id = $2`, [
-      msg.room,
-      msg.peer,
-    ]);
+    await sql.query(
+      `DELETE FROM webrtc_peers WHERE room = $1 AND peer_id = $2 AND session_id = $3`,
+      [msg.room, msg.peer, msg.session],
+    );
   }
   return json({ ok: true });
 }
