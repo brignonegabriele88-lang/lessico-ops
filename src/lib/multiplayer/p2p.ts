@@ -97,6 +97,8 @@ export function defaultIceServers(): RTCIceServer[] {
 
 export class P2PRoom {
   private readonly opts: P2PRoomOptions;
+  /** Unique browser-instance token: protects a fresh StrictMode/HMR join from an older cleanup. */
+  private readonly session = `s-${Math.random().toString(36).slice(2, 14)}`;
   private readonly peers = new Map<string, PeerSlot>();
   /** Per-remote-peer signal delivery chains (order-preserving). */
   private readonly signalQueues = new Map<string, Promise<void>>();
@@ -141,7 +143,12 @@ export class P2PRoom {
     void fetch("/api/rtc", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ op: "leave", room: this.opts.room, peer: this.opts.selfId }),
+      body: JSON.stringify({
+        op: "leave",
+        room: this.opts.room,
+        peer: this.opts.selfId,
+        session: this.session,
+      }),
       keepalive: true,
     }).catch(() => {});
   }
@@ -190,6 +197,7 @@ export class P2PRoom {
       room: this.opts.room,
       peer: this.opts.selfId,
       name: this.opts.name ?? "",
+      session: this.session,
       since: String(this.cursor),
     });
     const res = await fetch(`/api/rtc?${params}`);
